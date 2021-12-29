@@ -112,6 +112,48 @@ func dataToBlogPb(data *blogItem) *blogpb.Blog {
 	}
 }
 
+func (*server) UpdateBlog(ctx context.Context, req *blogpb.UpdateBlogRequest) (*blogpb.UpdateBlogResponse, error) {
+	fmt.Println("Update blog request")
+	blog := req.GetBlog()
+	oid, err := primitive.ObjectIDFromHex(blog.GetId())
+	if err != nil {
+		return nil, status.Errorf(
+			codes.Internal,
+			fmt.Sprintln("Cannot parse ID"),
+		)
+	}
+
+	// empty struct
+	data := &blogItem{}
+	filter := bson.M{"_id": oid}
+
+	res := collection.FindOne(ctx, filter)
+
+	if err := res.Decode(data); err != nil {
+		return nil, status.Errorf(
+			codes.NotFound,
+			fmt.Sprintf("Cannot find blog with spesific ID: %v \n", err),
+		)
+	}
+
+	// update struct
+	data.AuthorId = blog.GetAuthorId()
+	data.Content = blog.GetContent()
+	data.Title = blog.GetTitle()
+
+	_, updatedErr := collection.ReplaceOne(context.Background(), filter, data)
+	if updatedErr != nil {
+		return nil, status.Errorf(
+			codes.Internal,
+			fmt.Sprintf("Cannot update object in MongoDB: %v", updatedErr),
+		)
+	}
+
+	return &blogpb.UpdateBlogResponse{
+		Blog: dataToBlogPb(data),
+	}, nil
+}
+
 func main() {
 	// if something wrong, it would notify error from file and line number
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
